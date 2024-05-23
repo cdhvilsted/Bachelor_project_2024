@@ -11,5 +11,5 @@ The commit history at initial repository began at February 28th 2024.
 
 The folder 'olc_scripts' holds previous scripts which are no longer used in the project.
 
-Katharina Strauss Søgaard
+Katharina Strauss Søgaard,
 Cecilie Dahl Hvilsted
