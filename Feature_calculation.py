@@ -92,13 +92,13 @@ def entropy(a, axis=0):  # noqa
     return -np.nansum(a * np.log(a), axis=axis) / np.log(a.shape[axis])
 
 epochs_fun = np.mean
-channels_fun = np.std
+channels_fun = np.mean #trying mean now, was std before
 reduction_params = {}
 reduction_params['PowerSpectralDensity'] = {
     'reduction_func':
         [{'axis': 'epochs', 'function': epochs_fun},
          {'axis': 'channels', 'function': channels_fun},
-         {'axis': 'frequency', 'function': np.sum}],
+         {'axis': 'frequency', 'function': np.mean}],
     'picks': {
         'epochs': None,
         'channels': ch_names}}
@@ -135,8 +135,8 @@ reduction_params['SymbolicMutualInformation'] = {
          {'axis': 'channels', 'function': channels_fun}],
     'picks': {
         'epochs': None,
-        'channels_y': ch_names[0:8],
-        'channels': ch_names[9:-1]}}
+        'channels_y': ch_names,
+        'channels': ch_names}}
 
 reduction_params['KolmogorovComplexity'] = {
     'reduction_func':

@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from mne_icalabel import label_components
 import numpy as np
 import pyprep
+from autoreject import AutoReject
 
 XY_keys = "M/P, P/M, M/P, M/P, M/P, P/M, P/M, M/P, P/M, P/M, M/P, P/M, P/M, M/P, P/M, M/P, P/M, P/M, P/M, M/P, M/P, M/P, M/P, M/P, P/M, M/P, P/M, M/P, M/P, P/M, M/P, M/P, P/M, P/M, M/P, P/M, M/P, M/P, P/M, M/P, P/M, P/M, M/P, P/M, M/P, P/M, M/P, M/P, P/M, M/P, M/P, M/P, P/M, M/P, P/M, M/P, M/P, P/M, P/M, M/P, P/M, M/P, P/M, M/P, M/P, P/M, M/P, P/M, M/P, M/P, M/P, P/M, M/P, M/P, M/P, M/P, P/M, P/M, M/P, M/P"
 XY_keys = XY_keys.split(", ")
@@ -42,6 +43,7 @@ def reject_bad_segs(raw, annot_to_reject = ''):
     return mne.concatenate_raws(raw_segs)
 
 
+
 # Function for preprocessing
 def PreprocesEEG(raw, incl_ica = True):
     # Bad channels interpolation
@@ -59,15 +61,47 @@ def PreprocesEEG(raw, incl_ica = True):
 
     raw = raw.copy().filter(l_freq=0.1, h_freq=45, verbose=False) # 1-45 Hz filter
     #raw = raw.copy().interpolate_bads(reset_bads=True, verbose=True, mode='accurate') #interpolation of bad channels, if any
-    #raw = raw.copy().resample(sfreq = 250) # downsampling as some files have 500 Hz sample freq.
+    raw = raw.copy().resample(sfreq = 250) # downsampling as some files have 500 Hz sample freq.
 
     raw.info['bads'] = []
 
     # ICA: set up and fit the ICA
     if incl_ica == True:
-        picks = raw.ch_names
-        ica = mne.preprocessing.ICA(n_components=len(picks)-1, random_state=97, max_iter=800) # ICA parameters - willl need to be adjusted probably
-        ica.fit(raw)
+        # Break raw data into 1 s epochs
+        tstep = 1.0
+        events_ica = mne.make_fixed_length_events(raw, duration=tstep)
+        epochs_ica = mne.Epochs(raw, events_ica,
+                                tmin=0.0, tmax=tstep,
+                                baseline=None,
+                                preload=True)
+
+
+        ar = AutoReject(n_interpolate=[1, 2, 4],
+                        random_state=42,
+                        picks=mne.pick_types(epochs_ica.info, 
+                                            eeg=True,
+                                            eog=False
+                                            ),
+                        n_jobs=-1, 
+                        verbose=False
+                        )
+
+        ar.fit(epochs_ica)
+
+        reject_log = ar.get_reject_log(epochs_ica)
+
+                # ICA parameters
+        random_state = 97   # ensures ICA is reproducible each time it's run
+        ica_n_components = .99     # Specify n_components as a decimal to set % explained variance
+
+        # Fit ICA
+        ica = mne.preprocessing.ICA(n_components=ica_n_components, random_state=random_state, method='infomax', fit_params=dict(extended=True))
+        ica.fit(epochs_ica[~reject_log.bad_epochs], decim=3)
+
+
+        #picks = raw.ch_names
+        #ica = mne.preprocessing.ICA(n_components=len(picks)-1, random_state=97, max_iter=800, method='infomax') # ICA parameters - willl need to be adjusted probably
+        #ica.fit(raw)
 
         #ica.exclude = [1, 2]  # details on how we picked these are omitted here
         #ica.plot_properties(raw, picks=ica.exclude)
@@ -92,6 +126,7 @@ def PreprocesEEG(raw, incl_ica = True):
     return raw
 
 
+
 # Selecting channels
 picks = ['Fp1', 'Fp2', 'F3', 'F4', 'C3', 'C4', 'P3', 'P4', 'O1', 'O2', 'F7', 'F8', 'T7', 'T8', 'P7', 'P8', 'Fz', 'Cz', 'Pz', 'ECG EKG']
 
@@ -107,7 +142,7 @@ def LoadRaw(folder, path, patient_number, picks = ['Fp1', 'Fp2', 'F3', 'F4', 'C3
         pn = int(person_number)
 
         if pn == patient_number:
-            raw = mne.io.read_raw_edf(fname, verbose=False, preload=filename[0:5])
+            raw = mne.io.read_raw_edf(fname, verbose=False)
             annot = raw.annotations
             annot_dict = raw.annotations.count()
 
@@ -175,6 +210,13 @@ def LoadRaw(folder, path, patient_number, picks = ['Fp1', 'Fp2', 'F3', 'F4', 'C3
     raw_rej = PreprocesEEG(raw_rej, incl_ica = True)
 
 
-    #raw_rej.save('examples/Raws_inspected/patient'+str(patient_number)+'_raw.fif') #saving raw as fif file for future usage. 
+    raw_rej.save('examples/fif_to_csv_2/patient'+str(patient_number)+'_raw.fif') #saving raw as fif file for future usage. 
 
     return raw_rej, annot, annot_dict
+path ="EDF filer/"
+folder = os.fsencode(path)
+
+
+for i in range(60,61):
+    if i not in [64,1,26,55,76,70]:
+        LoadRaw(folder, path, i)
